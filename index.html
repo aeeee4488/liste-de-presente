@@ -3,29 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bac Sef - الرياضيات - الحضور</title>
+<title>Bac Sef - الحضور</title>
 <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <style>
 body{font-family:Arial;background:#0f172a;color:#fff;margin:0;padding:15px}
-.card{background:#1e293b;padding:15px;border-radius:15px;margin:15px 0;border:1px solid #334155}
-button{padding:12px 20px;border:none;border-radius:10px;font-weight:bold;cursor:pointer;margin:5px}
+.card{background:#1e293b;padding:15px;border-radius:15px;margin:12px 0;border:1px solid #334155}
+button{padding:12px 18px;border:none;border-radius:10px;font-weight:bold;cursor:pointer;margin:4px;font-size:15px}
 .btn-blue{background:#3b82f6;color:#fff}.btn-green{background:#22c55e;color:#fff}.btn-red{background:#ef4444;color:#fff}.btn-yellow{background:#eab308;color:#000}
-input{padding:12px;border-radius:8px;width:80%;border:1px solid #475569;background:#0f172a;color:#fff;font-size:16px}
-video{width:100%;border-radius:15px;border:2px solid #3b82f6;max-height:400px;background:#000}
-.present{color:#22c55e} .absent{color:#ef4444}
-#studentsList div{background:#0f172a;padding:8px;margin:5px 0;border-radius:8px;display:flex;justify-content:space-between}
+input{padding:14px;border-radius:8px;width:85%;border:2px solid #475569;background:#0f172a;color:#fff;font-size:18px}
+video{width:100%;border-radius:15px;border:3px solid #3b82f6;max-height:420px;background:#000}
+#debug{font-size:13px;color:#94a3b8;margin-top:8px;white-space:pre-wrap}
+.present{color:#22c55e;font-weight:bold} .absent{color:#ef4444}
+#studentsList div{background:#0f172a;padding:10px;margin:6px 0;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
 </style>
 </head>
 <body>
-<h2>📚 مادة الرياضيات - Bac Sef 1</h2>
-<div class="card">
+<h2>📚 Bac Sef - الرياضيات</h2>
+<div class="card" style="border-color:#22c55e">
 <h3>1- تسجيل تلميذ جديد</h3>
-<input id="nameInput" placeholder="مثلا: احمد">
+<input id="nameInput" placeholder="كتب الاسم هنا: مثلا احمد">
 <br><br>
 <button class="btn-blue" onclick="startEnroll()">📷 فتح الكاميرا</button>
-<button class="btn-red" onclick="stopCamera()">⏹️ ايقاف</button>
-<button class="btn-green" onclick="saveFace()">💾 حفظ الوجه</button>
-<p id="status">⏳ جاري تحميل نموذج الوجه...</p>
+<button class="btn-red" onclick="stopCamera()">⏹️ إيقاف</button>
+<button class="btn-green" onclick="forceSave()">💾 حفظ يدوي</button>
+<br>
+<button class="btn-yellow" onclick="captureAndSave()" style="width:95%;margin-top:10px">📸 التقاط وحفظ الوجه - ورك هنا</button>
+<p id="status" style="font-size:18px;font-weight:bold;color:#facc15">⏳ تحميل...</p>
+<p id="debug"></p>
 <div id="studentsList"></div>
 </div>
 <div class="card">
@@ -36,125 +40,129 @@ video{width:100%;border-radius:15px;border:2px solid #3b82f6;max-height:400px;ba
 <button class="btn-green" onclick="startAttendance()">▶️ بدء تسجيل الحضور</button>
 <button class="btn-yellow" onclick="downloadExcel()">📥 تحميل Excel</button>
 <button class="btn-red" onclick="clearAll()">🗑️ مسح الكل</button>
-<h3>اللائحة:</h3>
-<div id="attendanceList"></div>
+<div id="attendanceList" style="margin-top:10px"></div>
 </div>
 <script>
 let video=document.getElementById('video');
 let statusEl=document.getElementById('status');
+let debugEl=document.getElementById('debug');
 let nameInput=document.getElementById('nameInput');
-let students = JSON.parse(localStorage.getItem('students') || '[]');
+let students = JSON.parse(localStorage.getItem('students_v2') || '[]');
 let currentDescriptor=null;
 let stream=null;
 let attendanceMode=false;
 let attendance={};
+let modelsLoaded=false;
 async function loadModels(){
- try{
-  const MODEL_URL='https://cdn.jsdelivr.net/npm/@vladmandic/face-api@latest/model';
-  statusEl.textContent='⏳ تحميل النماذج...';
-  await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-  await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-  await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-  statusEl.textContent='✅ جاهز! اكتب اسم التلميذ وافتح الكاميرا';
- }catch(e){
+ statusEl.textContent='⏳ جاري تحميل النماذج...';
+ let urls=['https://cdn.jsdelivr.net/npm/@vladmandic/face-api@latest/model','https://justadudewhohacks.github.io/face-api.js/models'];
+ for(let MODEL_URL of urls){
   try{
-    const URL2='https://justadudewhohacks.github.io/face-api.js/models';
-    await faceapi.nets.tinyFaceDetector.loadFromUri(URL2);
-    await faceapi.nets.faceLandmark68Net.loadFromUri(URL2);
-    await faceapi.nets.faceRecognitionNet.loadFromUri(URL2);
-    statusEl.textContent='✅ جاهز!';
-  }catch(e2){
-    statusEl.textContent='❌ فشل تحميل النماذج: '+e2.message;
-  }
+   await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+   await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+   await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+   modelsLoaded=true;
+   statusEl.textContent='✅ جاهز! اكتب الاسم و افتح الكاميرا';
+   return;
+  }catch(e){}
  }
 }
 loadModels();
-async function startEnroll(){
- attendanceMode=false;
- await startCamera();
- statusEl.textContent='👀 انظر للكاميرا...';
- detectEnroll();
-}
 async function startCamera(){
  if(stream) stopCamera();
  try{
-  stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}});
+  stream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'}});
   video.srcObject=stream;
- }catch(err){ statusEl.textContent='❌ الكاميرا مرفوضة: '+err.message; }
+  await new Promise(r=>video.onloadedmetadata=r);
+  return true;
+ }catch(err){ statusEl.textContent='❌ الكاميرا: '+err.message; return false; }
 }
-function stopCamera(){
- if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+function stopCamera(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }
+async function startEnroll(){
+ attendanceMode=false;
+ let ok=await startCamera();
+ if(!ok) return;
+ statusEl.textContent='🔍 كنقلب على الوجه... قرب وجهك، شعل الضو';
+ detectEnroll();
 }
 async function detectEnroll(){
- if(!stream) return;
- if(attendanceMode) return;
- const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
- if(detection){
-  currentDescriptor = Array.from(detection.descriptor);
-  statusEl.textContent='✅ وجه مكتشف! اضغط حفظ الوجه';
- }else{
-  statusEl.textContent='🔍 لم أجد وجه... قرب وجهك';
- }
- if(!attendanceMode && stream) requestAnimationFrame(detectEnroll);
+ if(!stream || !modelsLoaded || attendanceMode) return;
+ try{
+  let options = new faceapi.TinyFaceDetectorOptions({inputSize:512, scoreThreshold:0.2});
+  let detection = await faceapi.detectSingleFace(video, options).withFaceLandmarks().withFaceDescriptor();
+  if(detection){
+   currentDescriptor = Array.from(detection.descriptor);
+   statusEl.textContent='✅ وجه مكتشف! دابا ورك على زر التقاط وحفظ';
+   statusEl.style.color='#22c55e';
+  }else{
+   statusEl.textContent='🔍 لم أجد وجه... قرب وجهك (30cm)، شعل الضو';
+   statusEl.style.color='#facc15';
+  }
+ }catch(e){}
+ if(!attendanceMode && stream) setTimeout(detectEnroll, 500);
 }
-function saveFace(){
+async function captureAndSave(){
  let name=nameInput.value.trim();
- if(!name){ alert('اكتب الاسم أولا'); return; }
- if(!currentDescriptor){ alert('لم يتم التقاط الوجه'); return; }
+ if(!name){ alert('كتب الاسم أولا'); return; }
+ if(!currentDescriptor){
+  try{
+   let options = new faceapi.TinyFaceDetectorOptions({inputSize:512, scoreThreshold:0.2});
+   let d = await faceapi.detectSingleFace(video, options).withFaceLandmarks().withFaceDescriptor();
+   if(d){ currentDescriptor=Array.from(d.descriptor); }
+  }catch(e){}
+ }
+ if(!currentDescriptor){ alert('ما لقيتش الوجه. شعل الضو مزيان و قرب وجهك'); return; }
  students.push({name, descriptor: currentDescriptor});
+ localStorage.setItem('students_v2', JSON.stringify(students));
  localStorage.setItem('students', JSON.stringify(students));
- currentDescriptor=null;
- nameInput.value='';
+ currentDescriptor=null; nameInput.value='';
  statusEl.textContent='✅ تم حفظ '+name;
  renderStudents();
 }
+function forceSave(){
+ let name=nameInput.value.trim();
+ if(!name){ alert('كتب الاسم'); return; }
+ students.push({name, descriptor: null, manual:true});
+ localStorage.setItem('students_v2', JSON.stringify(students));
+ localStorage.setItem('students', JSON.stringify(students));
+ nameInput.value=''; renderStudents();
+}
 function renderStudents(){
  let div=document.getElementById('studentsList');
- if(students.length==0){ div.innerHTML='<p>⚠️ سجل التلاميذ أولا - لا يوجد تلاميذ</p>'; }
- else{
-  div.innerHTML = students.map((s,i)=>`<div><span>${s.name}</span><button onclick="removeStudent(${i})" style="background:#ef4444;color:#fff;padding:4px 8px;border-radius:5px">حذف</button></div>`).join('');
- }
- renderAttendance();
+ if(students.length==0){ div.innerHTML='<p>⚠️ لا يوجد تلاميذ</p>'; }
+ else{ div.innerHTML='<p>عدد: '+students.length+'</p>'+students.map((s,i)=>`<div><span>${s.name}</span><button onclick="removeStudent(${i})" style="background:#ef4444;color:#fff">حذف</button></div>`).join(''); }
 }
-function removeStudent(i){ students.splice(i,1); localStorage.setItem('students', JSON.stringify(students)); renderStudents(); }
+function removeStudent(i){ students.splice(i,1); localStorage.setItem('students_v2', JSON.stringify(students)); localStorage.setItem('students', JSON.stringify(students)); renderStudents(); }
 renderStudents();
 async function startAttendance(){
  if(students.length==0){ alert('سجل التلاميذ أولا'); return; }
- attendanceMode=true;
- attendance={};
- students.forEach(s=>attendance[s.name]='غائب');
- await startCamera();
- statusEl.textContent='📷 بدأ تسجيل الحضور';
+ attendanceMode=true; attendance={}; students.forEach(s=>attendance[s.name]='غائب');
+ let ok=await startCamera(); if(!ok) return;
  detectAttendance();
 }
 async function detectAttendance(){
- if(!attendanceMode) return;
- if(!stream) return;
- const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
- if(detections.length>0){
+ if(!attendanceMode || !stream) return;
+ try{
+  let options = new faceapi.TinyFaceDetectorOptions({inputSize:320, scoreThreshold:0.35});
+  let detections = await faceapi.detectAllFaces(video, options).withFaceLandmarks().withFaceDescriptors();
   detections.forEach(det=>{
-   let best=null, bestDist=0.6;
+   let best=null, bestDist=0.55;
    students.forEach(s=>{
+    if(!s.descriptor) return;
     let dist = faceapi.euclideanDistance(det.descriptor, new Float32Array(s.descriptor));
     if(dist<bestDist){ bestDist=dist; best=s.name; }
    });
    if(best){ attendance[best]='حاضر'; }
   });
-  renderAttendance();
- }
- if(attendanceMode) setTimeout(detectAttendance, 800);
-}
-function renderAttendance(){
- let div=document.getElementById('attendanceList');
- div.innerHTML = Object.entries(attendance).map(([n,st])=>`<div class="${st=='حاضر'?'present':'absent'}">${n}: ${st}</div>`).join('') || students.map(s=>`<div>${s.name}: لم تبدأ الحصة</div>`).join('');
+ }catch(e){}
+ if(attendanceMode) setTimeout(detectAttendance, 1000);
 }
 function downloadExcel(){
- if(Object.keys(attendance).length==0){ alert('ابدأ الحصة أولا'); return; }
- let csv="الاسم,الحالة\n"+Object.entries(attendance).map(([n,s])=>`${n},${s}`).join("\n");
- let blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
- let a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='attendance_'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+ let csv="الاسم,الحالة\\n"+Object.entries(attendance).map(([n,s])=>`${n},${s}`).join("\\n");
+ let blob=new Blob(["\\uFEFF"+csv],{type:'text/csv;charset=utf-8;'});
+ let a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='attendance.csv'; a.click();
 }
-function clearAll(){ if(confirm('مسح كل التلاميذ؟')){ students=[]; localStorage.clear(); renderStudents(); statusEl.textContent='تم المسح'; } }
+function clearAll(){ if(confirm('مسح؟')){ students=[]; localStorage.clear(); renderStudents(); } }
 </script>
 </body>
 </html>
